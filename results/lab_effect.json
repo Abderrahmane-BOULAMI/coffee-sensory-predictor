@@ -1,12 +1,6 @@
 {
   "r2_product_only": 0.12905521007570198,
   "r2_product_and_lab": 0.12787656328971653,
-  "within_country_spread": {
-    "Brazil": 1.0678257456824614,
-    "Costa Rica": 1.1683372332001247,
-    "Ethiopia": 1.3775933802602283,
-    "Guatemala": 1.9857313555730827,
-    "Mexico": 1.6732557451626626,
-    "Taiwan": 0.5529870261844533
-  }
+  "pairs": 13,
+  "pairs_dominated_by_one_owner": 4
 }

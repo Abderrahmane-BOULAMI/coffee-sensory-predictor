@@ -26,7 +26,7 @@ FEATURES = CATEGORICAL + NUMERIC
 # Harvest year is left out by design: a future lot always has a year outside the training range,
 # so the model would extrapolate. experiments/run_all.py reports the effect of adding it back.
 FEATURE_GROUPS = {"origin": ["country"], "process": ["process"], "variety and species": ["variety", "species"],
-                  "altitude": ["altitude_m"], "green bean (moisture, defects, colour)":
+                  "altitude": ["altitude_m"], "bean quality (moisture, defects, quakers, colour)":
                       ["moisture", "category_one_defects", "category_two_defects", "quakers", "color"]}
 MODEL_NAMES = {"mean": "Mean of training lots", "ridge": "Ridge regression",
                "random_forest": "Random forest", "lightgbm": "Gradient boosting (LightGBM)"}
@@ -128,14 +128,30 @@ def conformal_intervals(df: pd.DataFrame, target: str, model: str, alpha: float 
         m = make_model(model, seed)
         m.fit(train.iloc[fit_i][features], train.iloc[fit_i][target])
         resid = np.abs(train.iloc[cal_i][target].values - m.predict(train.iloc[cal_i][features]))
-        n = len(resid)
-        q = np.quantile(resid, min(1.0, np.ceil((n + 1) * (1 - alpha)) / n), method="higher")
+        q = conformal_width(resid, alpha)
         p = m.predict(df.iloc[te][features])
         rows.append(pd.DataFrame({"lot_id": df.iloc[te].lot_id.values, "pred": p, "low": p - q, "high": p + q,
-                                  "actual": df.iloc[te][target].values}))
+                                  "actual": df.iloc[te][target].values, "fold": len(rows)}))
     out = pd.concat(rows, ignore_index=True)
     out["covered"] = (out.actual >= out.low) & (out.actual <= out.high)
     return out
+
+
+def conformal_width(abs_residuals: np.ndarray, alpha: float) -> float:
+    """Half-width of a split-conformal interval: the ceil((n + 1)(1 - alpha))-th smallest residual."""
+    r = np.sort(np.asarray(abs_residuals))
+    k = int(np.ceil((len(r) + 1) * (1 - alpha)))
+    return float(r[min(k, len(r)) - 1])
+
+
+def fit_conformal(df: pd.DataFrame, target: str, model: str, alpha: float = 0.2, seed: int = 0,
+                  features: list[str] = FEATURES):
+    """One split-conformal pass on all lots: 75% of owners fit the model, 25% calibrate the width."""
+    fit_i, cal_i = next(GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=seed).split(df, groups=df.group))
+    m = make_model(model, seed)
+    m.fit(df.iloc[fit_i][features], df.iloc[fit_i][target])
+    resid = np.abs(df.iloc[cal_i][target].values - m.predict(df.iloc[cal_i][features]))
+    return m, conformal_width(resid, alpha)
 
 
 def permutation_importance_grouped(df: pd.DataFrame, target: str, model: str, seed: int = 0,

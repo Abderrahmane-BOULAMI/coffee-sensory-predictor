@@ -1,8 +1,9 @@
 {
-  "created_utc": "2026-10-13T12:32:36+00:00",
+  "created_utc": "2026-10-13T13:00:22+00:00",
   "data_file": "coffee_ratings.csv",
   "data_sha256": "ae6fdd58f4a7f77397c11c2657e22be8aa8f746bdc5a74cf479e981bd3c25d5e",
   "git_commit": null,
+  "git_uncommitted_changes": null,
   "python": "3.13.16",
   "packages": {
     "numpy": "2.5.3",

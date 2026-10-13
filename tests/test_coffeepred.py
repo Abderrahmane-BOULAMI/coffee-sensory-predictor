@@ -3,8 +3,8 @@ import pandas as pd
 import pytest
 
 from coffeepred import lineage
-from coffeepred.models import (FEATURES, conformal_intervals, group_bootstrap_r2, out_of_fold,
-                               permutation_importance_grouped, score, splits)
+from coffeepred.models import (FEATURES, conformal_intervals, conformal_width, fit_conformal, group_bootstrap_r2,
+                               out_of_fold, permutation_importance_grouped, score, splits)
 from coffeepred.validate import ATTRIBUTES, Rule, validate
 
 DATA = "data/coffee_ratings.csv"
@@ -78,6 +78,9 @@ def test_conformal_coverage_close_to_nominal():
     df = _synthetic(n=1500, seed=2)
     out = conformal_intervals(df, "y", "ridge", alpha=0.2)
     assert 0.74 < out.covered.mean() < 0.86
+    assert conformal_width(np.arange(1, 101), 0.2) == 81      # the ceil(101 * 0.8) = 81st smallest
+    model, half = fit_conformal(df, "y", "ridge", alpha=0.2)
+    assert half > 0 and model.predict(df[FEATURES].head(2)).shape == (2,)
 
 
 def test_bootstrap_interval_and_importance():

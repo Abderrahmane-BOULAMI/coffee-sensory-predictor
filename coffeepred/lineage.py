@@ -20,11 +20,11 @@ def sha256(path: str | Path) -> str:
     return h.hexdigest()
 
 
-def _git_commit() -> str | None:
+def _git(*args: str) -> str | None:
     try:
-        out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5,
+        out = subprocess.run(["git", *args], capture_output=True, text=True, timeout=5,
                              cwd=Path(__file__).resolve().parent)
-        return out.stdout.strip() or None
+        return out.stdout.strip() if out.returncode == 0 else None
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -40,7 +40,9 @@ def manifest(data_path: str | Path, config: dict, steps: list[dict]) -> dict:
         "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "data_file": Path(data_path).name,
         "data_sha256": sha256(data_path),
-        "git_commit": _git_commit(),
+        "git_commit": _git("rev-parse", "HEAD"),
+        "git_uncommitted_changes": (None if _git("rev-parse", "HEAD") is None
+                                    else bool(_git("status", "--porcelain"))),
         "python": platform.python_version(),
         "packages": versions,
         "config": config,

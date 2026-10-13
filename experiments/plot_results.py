@@ -80,12 +80,12 @@ def fig_targets():
 def fig_intervals():
     lots = pd.read_csv(ROOT / "powerbi" / "lots_with_predictions.csv")
     conf = pd.read_csv(RES / "conformal.csv")
-    s = lots.dropna(subset=["pred_total_low80"]).sample(120, random_state=0).sort_values("pred_total_cup_points")
+    s = lots.dropna(subset=["pred_total_low80"]).sample(120, random_state=0).sort_values("pred_total_conformal")
     fig, ax = plt.subplots(figsize=(9, 3.8))
     x = np.arange(len(s))
     inside = (s.total_cup_points >= s.pred_total_low80) & (s.total_cup_points <= s.pred_total_high80)
     ax.vlines(x, s.pred_total_low80, s.pred_total_high80, color=GRID, lw=3)
-    ax.scatter(x, s.pred_total_cup_points, s=10, color=BLUE, label="prediction", zorder=3)
+    ax.scatter(x, s.pred_total_conformal, s=10, color=BLUE, label="prediction", zorder=3)
     ax.scatter(x[inside.values], s.total_cup_points[inside], s=14, color=INK2, marker="x", label="actual, inside",
                zorder=4)
     ax.scatter(x[~inside.values], s.total_cup_points[~inside], s=18, color=ORANGE, marker="x",
@@ -111,7 +111,7 @@ def fig_importance():
     ax.set_yticks(y, imp.index)
     ax.axvline(0, color=INK2, lw=0.8)
     ax.set_xlabel("drop in R² when the group is shuffled (new owners)")
-    ax.set_title("What the models use: green-bean defects and origin, hardly the process")
+    ax.set_title("What the models use: bean defects and origin, hardly the process")
     ax.legend(loc="lower right", fontsize=8.5)
     ax.grid(axis="y", visible=False)
     save(fig, "fig4_importance.png")

@@ -15,7 +15,8 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from coffeepred.models import FEATURES, MODEL_NAMES, make_model  # noqa: E402
+from coffeepred import lineage  # noqa: E402
+from coffeepred.models import FEATURES, MODEL_NAMES, fit_conformal, make_model  # noqa: E402
 from coffeepred.validate import TARGETS, validate  # noqa: E402
 
 RES = ROOT / "results"
@@ -44,6 +45,13 @@ def fitted_models():
     return models
 
 
+@st.cache_resource
+def total_with_interval():
+    """Split-conformal model for the total score, fitted on all lots (75% of owners fit, 25% calibrate)."""
+    df, _ = data()
+    return fit_conformal(df, "total_cup_points", best.loc["total_cup_points", "model"], alpha=0.2, seed=0)
+
+
 df, report = data()
 best = pd.read_csv(RES / "best_models.csv", index_col=0)
 bench = pd.read_csv(RES / "benchmark.csv")
@@ -51,13 +59,15 @@ conf = pd.read_csv(RES / "conformal.csv")
 manifest = json.loads((RES / "run_manifest.json").read_text())
 
 page = st.sidebar.radio("View", ["KPIs", "Predict a coffee", "Model benchmark", "Data quality", "Traceability"])
+same_data = lineage.sha256(ROOT / "data" / "coffee_ratings.csv") == manifest["data_sha256"]
 st.sidebar.caption(f"{len(df):,} lots, {df.country.nunique()} origins, {df.group.nunique()} owners. "
-                   f"Data file SHA-256 {manifest['data_sha256'][:12]}.")
+                   f"Data file SHA-256 {manifest['data_sha256'][:12]} "
+                   f"({'matches the results' if same_data else 'DOES NOT match the results: rerun the experiments'}).")
 
 if page == "KPIs":
     st.title("Coffee sensory predictor")
     st.write("How well can the cup profile of a coffee be predicted from its product data, before anyone tastes "
-             "it? Every figure here comes from owners the model never saw during training.")
+             "it? Unless stated otherwise, every figure comes from owners the model never saw during training.")
     c80 = conf[conf.nominal == 0.8].iloc[0]
     t = best.loc["total_cup_points"]
     k = st.columns(4)
@@ -89,7 +99,7 @@ elif page == "Predict a coffee":
     color = c[1].selectbox("Bean colour", sorted(df.color.unique()))
     altitude = c[2].slider("Altitude (m)", 100, 3000, 1800, 50)
     c = st.columns(3)
-    moisture = c[0].slider("Moisture (%)", 0.0, 20.0, 11.0, 0.5) / 100
+    moisture = c[0].slider("Moisture (%)", 5.0, 20.0, 11.0, 0.5) / 100
     cat1 = c[1].number_input("Category 1 defects", 0, 70, 0)
     cat2 = c[2].number_input("Category 2 defects", 0, 60, 2)
     x = pd.DataFrame([{"country": country, "process": process, "variety": variety, "species": species,
@@ -97,9 +107,9 @@ elif page == "Predict a coffee":
                        "category_one_defects": cat1, "category_two_defects": cat2, "quakers": 0}])[FEATURES]
     models = fitted_models()
     preds = {t: float(models[t].predict(x)[0]) for t in TARGETS}
-    half = conf[conf.nominal == 0.8].iloc[0].mean_width / 2
-    st.metric("Predicted total score", f"{preds['total_cup_points']:.1f}",
-              f"80% interval {preds['total_cup_points'] - half:.1f} to {preds['total_cup_points'] + half:.1f}",
+    cmodel, half = total_with_interval()
+    centre = float(cmodel.predict(x)[0])
+    st.metric("Predicted total score", f"{centre:.1f}", f"80% interval {centre - half:.1f} to {centre + half:.1f}",
               delta_color="off")
     prof = pd.DataFrame({"attribute": [LABELS[t] for t in TARGETS[:-1]], "predicted": [preds[t] for t in TARGETS[:-1]],
                          "average lot": [df[t].mean() for t in TARGETS[:-1]]}).melt(id_vars="attribute")
@@ -109,7 +119,8 @@ elif page == "Predict a coffee":
                                                              title=None, legend=alt.Legend(orient="bottom")),
         tooltip=["attribute", "variable", alt.Tooltip("value:Q", format=".2f")]).properties(height=280),
         width="stretch")
-    st.caption("Models refitted on all lots. The interval is the cross-validated 80% conformal interval for new owners.")
+    st.caption("Attribute models are refitted on all lots. The total score and its 80% interval come from a "
+               "split-conformal model: 75% of owners fit it, the other 25% set the interval width.")
 
 elif page == "Model benchmark":
     st.title("Model benchmark")

@@ -1,6 +1,6 @@
 """Run every experiment and write results/ and powerbi/.
 
-    python experiments/run_all.py        (about 3 minutes)
+    python experiments/run_all.py        (about 2 minutes)
 """
 from __future__ import annotations
 
@@ -85,8 +85,10 @@ def main():
     intervals = None
     for alpha in [0.2, 0.1]:
         ci_df = conformal_intervals(df, "total_cup_points", m_total, alpha=alpha, seed=SEED)
+        per_fold = ci_df.groupby("fold").covered.mean()
         conf_rows.append({"target": "total_cup_points", "model": m_total, "nominal": 1 - alpha,
-                          "coverage": ci_df.covered.mean(), "mean_width": (ci_df.high - ci_df.low).mean()})
+                          "coverage": ci_df.covered.mean(), "mean_width": (ci_df.high - ci_df.low).mean(),
+                          "fold_coverage_min": per_fold.min(), "fold_coverage_max": per_fold.max()})
         if alpha == 0.2:
             intervals = ci_df
     pd.DataFrame(conf_rows).to_csv(OUT / "conformal.csv", index=False)
@@ -106,14 +108,20 @@ def main():
         if len(labs) < 2:
             continue
         for lab in labs.index:
-            v = g.loc[g.lab == lab, "resid"].values
-            boots = [rng.choice(v, len(v)).mean() for _ in range(1000)]
-            lab_rows.append({"country": country, "lab": lab, "lots": len(v), "mean_residual": v.mean(),
-                             "ci_low": np.quantile(boots, 0.025), "ci_high": np.quantile(boots, 0.975)})
+            sub = g[g.lab == lab]
+            owners = sub.group.unique()
+            by_owner = {o: sub.resid[sub.group == o].values for o in owners}
+            boots = [np.concatenate([by_owner[o] for o in rng.choice(owners, len(owners))]).mean()
+                     for _ in range(1000)]
+            lab_rows.append({"country": country, "lab": lab, "lots": len(sub), "owners": len(owners),
+                             "largest_owner_share": sub.group.value_counts(normalize=True).iloc[0],
+                             "first_year": sub.graded_on.dt.year.min(), "last_year": sub.graded_on.dt.year.max(),
+                             "mean_residual": sub.resid.mean(), "ci_low": np.quantile(boots, 0.025),
+                             "ci_high": np.quantile(boots, 0.975)})
     labs = pd.DataFrame(lab_rows)
     labs.to_csv(OUT / "lab_effect.csv", index=False)
-    spread = labs.groupby("country").mean_residual.agg(lambda v: v.max() - v.min())
-    lab_gain["within_country_spread"] = spread.to_dict()
+    lab_gain["pairs"] = len(labs)
+    lab_gain["pairs_dominated_by_one_owner"] = int((labs.largest_owner_share >= 0.9).sum())
     dump(lab_gain, "lab_effect.json")
 
     print("E7 the circular model")
@@ -126,8 +134,9 @@ def main():
                "graded_on"] + TARGETS].copy()
     for t in TARGETS:
         lots[f"pred_{t}"] = oof[(t, best.loc[t, "model"])].round(3).values
-    lots = lots.merge(intervals[["lot_id", "low", "high"]].rename(
-        columns={"low": "pred_total_low80", "high": "pred_total_high80"}), on="lot_id", how="left")
+    lots = lots.merge(intervals[["lot_id", "pred", "low", "high"]].rename(
+        columns={"pred": "pred_total_conformal", "low": "pred_total_low80", "high": "pred_total_high80"}),
+        on="lot_id", how="left")
     lots.to_csv(PBI / "lots_with_predictions.csv", index=False)
     bench.to_csv(PBI / "model_metrics.csv", index=False)
     report.to_csv(PBI / "data_quality.csv", index=False)
