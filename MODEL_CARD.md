@@ -10,10 +10,10 @@
 
 **Models.** Ridge regression for the total score and most attributes, random forest for flavour and body (best on grouped cross-validation).
 
-**Performance on producers never seen.** Total score: R² 0.13 (0.04 to 0.22), mean absolute error 1.72 points. Attributes: R² 0.08 to 0.17. On lots graded in later years: no better than the average.
+**Performance on producers never seen.** Total score: R² 0.13 (0.04 to 0.22), mean absolute error 1.72 points. Attributes: R² 0.08 to 0.17. On lots graded in later years: about as good as predicting the training average (R² below zero).
 
-**Uncertainty.** Split-conformal 80% intervals cover 79% of held-out lots, with a width of about 5 points.
+**Uncertainty.** Split-conformal 80% intervals cover 78% of held-out lots (73% to 85% per fold), with a width of about 5 points.
 
-**Known limits.** Small share of variance explained; no transfer across years; scores reflect certification graders, not consumers; possible differences between grading organisations.
+**Known limits.** Small share of variance explained; no transfer across years; scores reflect certification graders, not consumers; grading organisation and producer cannot be separated; Robusta lots are graded under a different protocol.
 
 **Reproducibility.** `python experiments/run_all.py` with seed 0 rebuilds every number; `results/run_manifest.json` records the data hash and package versions.
