@@ -1,0 +1,3 @@
+target,model,nominal,coverage,mean_width
+total_cup_points,ridge,0.8,0.7855007473841554,5.026872930773173
+total_cup_points,ridge,0.9,0.890881913303438,6.957601646876978
